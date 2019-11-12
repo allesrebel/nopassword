@@ -6,7 +6,7 @@ app = Flask(__name__)
 App Router Definitions + Blank Pages
 """
 
-@app.route( rule = '/' ) 
+@app.route( rule = '/', endpoint = 'index' )
 def index( **req ):
     print( req )
     return 'hello world'
