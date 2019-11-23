@@ -1,7 +1,7 @@
 {% extends "_flash.html" %}
+
 {% block body %}
-  <form method="post">
-    <p><input type=text name=user>
-    <p><input type=submit value=Login>
+  <form method="POST" action="/login">
+    {{ form.email }}
   </form>
 {% endblock %}
