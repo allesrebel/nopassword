@@ -1,6 +1,5 @@
 from flask import *
 from flask.helpers import *
-from flask.app import *
 
 app = Flask(__name__)
 app.config.from_envvar('CONFIG_FILE')
@@ -37,7 +36,8 @@ def user( user ):
         return app.send_static_file( user )
 
     if user not in app.users:
-        raise default_exceptions[404]
+        abort(404)
+
     return 'user page'
 
 # POST Registration Route for new user
@@ -46,10 +46,27 @@ def register_user( user ):
     return 'Registered!'
 
 # GET Registration route
-@app.route( rule = '/register/', methods = ['GET'])
+@app.route( rule = '/register', methods = ['GET', 'POST'])
 def register():
-    
-    return 'Got to register page'
+    if request.method == 'POST':
+        # User already logged in
+        if 'user' in session:
+            flash('Already Logged In')
+
+        # User already exists
+        elif len(request.form['user']) and request.form['user'] in app.users:
+            flash('User {} Already Exists, please log in'.format(request.form['user']))
+            return redirect( url_for( 'login' ) )
+        
+        else: # create user
+            flash('user created and logged in')
+            app.users[request.form['user']] = True
+            session['user'] = request.form['user']
+            return redirect( url_for( 'index' ) )
+
+        return redirect( url_for( 'index' ) )
+    else:
+        return render_template(['register.html'])
 
 # Login Route
 @app.route('/login', methods = ['GET', 'POST'])
@@ -61,7 +78,7 @@ def login():
 
         # User wants to log in
         elif len(request.form['user']) and request.form['user'] in app.users:
-            flash('Welcome {}!'.format(user))
+            flash('Welcome {}!'.format(request.form['user']))
             session['user'] = request.form['user']
         else:
             flash('Enter valid username')
@@ -86,3 +103,8 @@ def user_settings( user ):
     else: # is GET
         url_for('user_settings', user=user)
         return 'Settings for user'
+
+@app.route( rule = '/users', methods = ['GET'])
+def users():
+    print( request.args )
+    return str( app.users ).encode()
