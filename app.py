@@ -4,6 +4,11 @@ from flask.helpers import *
 app = Flask(__name__)
 app.config.from_envvar('CONFIG_FILE')
 
+# init the login manager
+from flask_login import LoginManager
+login_manager = LoginManager()
+login_manager.init_app(app)
+
 # We'll keep things super simple.
 # Everything will be inmemory for now
 
@@ -40,33 +45,44 @@ def user( user ):
 
     return 'user page'
 
-# POST Registration Route for new user
-@app.route( rule = '/register/<string:user>/', methods = ['POST'])
-def register_user( user ):
-    return 'Registered!'
+from wtforms import Form, StringField, validators
+
+class RegistrationForm(Form):
+    email = StringField(
+        'Email Address', 
+        [
+            validators.Length(min=6, max=35), 
+            validators.Email(), 
+            validators.InputRequired()
+        ]
+    )
 
 # GET Registration route
 @app.route( rule = '/register', methods = ['GET', 'POST'])
 def register():
-    if request.method == 'POST':
+    # Toss the values in from the post request into the form
+    form = RegistrationForm(request.values)
+
+    if request.method == 'POST' and form.validate():
+
         # User already logged in
         if 'user' in session:
             flash('Already Logged In')
 
         # User already exists
-        elif len(request.form['user']) and request.form['user'] in app.users:
-            flash('User {} Already Exists, please log in'.format(request.form['user']))
+        elif form.email in app.users:
+            flash('User/Email {} Already Exists, please log in'.format( form.data['email'] ))
             return redirect( url_for( 'login' ) )
         
         else: # create user
-            flash('user created and logged in')
-            app.users[request.form['user']] = True
-            session['user'] = request.form['user']
+            flash('user account created and logged in')
+            app.users[ form.data['email'] ] = True
+            session['user'] = form.data['email']
             return redirect( url_for( 'index' ) )
 
         return redirect( url_for( 'index' ) )
     else:
-        return render_template(['register.html'])
+        return render_template('register.html', form=form)
 
 # Login Route
 @app.route('/login', methods = ['GET', 'POST'])
