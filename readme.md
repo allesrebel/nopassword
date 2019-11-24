@@ -11,3 +11,5 @@ and allows users to sign up.
 ## Setup
 * Install dependencies w/ requirements.txt
 * Run with "env FLASK\_ENV=development CONFIG\_FILE=debug\_settings.cfg python3 -m flask run"
+* Run the development smtp server with "python -m smtpd -n -c DebuggingServer localhost:8025"
+* Have fun!

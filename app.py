@@ -1,12 +1,16 @@
 from flask import *
+import os; import base64; import time; import threading;
 
 app = Flask(__name__)
 app.config.from_envvar('CONFIG_FILE')
 
+# init the mailer
+from flask_mail import Mail, Message
+mail = Mail(app)
+
 # init the login manager
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user, mixins
-login_manager = LoginManager()
-login_manager.init_app(app)
+login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 @login_manager.user_loader
@@ -24,7 +28,8 @@ def favicon():
 Database connection setup etc
 """
 
-app.users = {}
+app.login_hashtable = {}
+app.user_sessions = {}
 
 """
 App Router Definitions + Blank Pages
@@ -65,16 +70,18 @@ class User(mixins.UserMixin):
         self.id = email
     
     def get(email):
-        if email in app.users:
+        if email in app.user_sessions:
             return User(email)
         else:
             return None
 
-# GET Registration route
-@app.route( '/register', methods = ['GET', 'POST'])
-@app.route( '/register/<string:email>', methods = ['GET'])
-def register( **req ):
+def kill_hashtable_entry(hash):
+    if hash in app.login_hashtable:
+        del app.login_hashtable[hash]
 
+# GET Login/Registration route, same logic!
+@app.route( '/login', methods = ['GET', 'POST'])
+def login():
     if current_user.is_authenticated:
         return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
 
@@ -82,51 +89,46 @@ def register( **req ):
     form = UserForm(request.values)
 
     if request.method == 'POST' and form.validate():
+        # Literally random numbers for hash
+        usr_hash = base64.urlsafe_b64encode( os.urandom(18) ).decode('utf-8')
+        app.login_hashtable[ usr_hash ] = form.data['email']
+        threading.Timer(5*60, kill_hashtable_entry, args=[usr_hash]).start()
+
+        msg = Message(
+            subject="magic link/nopassword login",
+            sender="allesrebel@yahoo.com",
+            recipients=[form.data['email']],
+            body="Login with: http://{}/login/{}\nLink Expires in 5 minutes!".format('localhost:5000', usr_hash )
+        )
+        mail.send(msg)
 
         # User already exists
-        elif form.data['email'] in app.users:
-            flash('User/Email {} Already Exists, please log in'.format( form.data['email'] ))
-            return redirect( url_for( 'login', email = form.data['email'] ))
-        
-        else: # create user
-            app.users[ form.data['email'] ] = True
-            login_user( User(form.data['email']) )
-            flash('user account created and logged in')
-            return redirect( url_for( 'index' ) )
+        if form.data['email'] in app.login_hashtable:
+            flash('Welcome back {}, login email sent!'.format( form.data['email'] ))
+        else: # User Does not Exist
+            flash('Email Sent! Please confirm your account')
 
         return redirect( url_for( 'index' ) )
     else:
-        return render_template('register.html', form=form )
+        return render_template('login.html', form=form )
 
-# Login Route
-@app.route('/login', methods = ['GET', 'POST'])
-@app.route('/login/<string:email>', methods = ['GET'])
-def login( **req ):
+# Actual Session Start from hash
+@app.route('/login/<string:hash>', methods = ['GET'])
+def login_processor(hash):
+    if hash in app.login_hashtable:
+        email = app.login_hashtable[hash]
+        app.user_sessions[email] = time.time()
+        del app.login_hashtable[hash]
 
-    if current_user.is_authenticated:
-        return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
+        if login_user( User( email ), force=True, remember=True ) is False:
+            abort(201) # error!
 
-    # Toss the values in from the post request into the form (if present)
-    form = UserForm(request.values)
-
-    if request.method == 'POST' and form.validate() :
-
-        # check if user exists
-        if form.data['email'] in app.users:
-            login_user( User(form.data['email']) )
-            flash('Logged in successfully.')
-            
-        else:
-            flash('no matching user found, please register')
-            return redirect(url_for('register', email = form.data['email']))
-
-        # maybe check the args to verify that next is
-        # a valid location
-        return redirect( url_for('user_portal', user = current_user.get_id() ) )
+        flash( 'Welcome {}'.format( email ) )
+        return redirect( url_for( 'index' ) )
     else:
-        return render_template('login.html', form=form)
+        return abort(404)
 
-# Login Route
+# Logout Route
 @app.route('/logout', methods = ['GET'])
 def logout():
     logout_user()
@@ -147,4 +149,4 @@ def user_settings( user ):
 @login_required
 def users():
     print( request.args )
-    return str( app.users ).encode()
+    return str( app.login_hashtable ).encode()
