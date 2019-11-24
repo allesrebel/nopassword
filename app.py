@@ -1,5 +1,5 @@
 from flask import *
-from flask.helpers import *
+import flask.helpers
 
 app = Flask(__name__)
 app.config.from_envvar('CONFIG_FILE')
@@ -13,6 +13,10 @@ login_manager.login_view = "login"
 @login_manager.user_loader
 def load_user(user_id):
     return User.get(user_id)
+
+@app.route('/favicon.ico')
+def favicon():
+    return app.send_static_file( 'favicon.ico' )
 
 # We'll keep things super simple.
 # Everything will be inmemory for now
@@ -33,23 +37,19 @@ App Router Definitions + Blank Pages
 def index():
     return render_template('index.html')
 
-resource_file_whitelist = ['favicon.ico']
-
 """
 Not sure I need this route tbh
 Probably just a landing for the user itself
 """
-@app.route( rule = '/<string:user>/', methods = ['GET', 'POST'] )
+
+@app.route( rule = '/<string:user>', methods = ['GET', 'POST'] )
 @login_required
-def user( user ):
-    #Handle Icon requests
-    if user in resource_file_whitelist:
-        return app.send_static_file( user )
+def user_portal( user ):
+    if user != current_user.get_id():
+        flash('unauthorized, redirected to your portal')
+        return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
 
-    if user not in app.users:
-        abort(404)
-
-    return 'user page'
+    return render_template('index.html')
 
 from wtforms import Form, StringField, validators
 
@@ -74,8 +74,9 @@ class User(mixins.UserMixin):
             return None
 
 # GET Registration route
-@app.route( rule = '/register', methods = ['GET', 'POST'])
-def register():
+@app.route( '/register', methods = ['GET', 'POST'])
+@app.route( '/register/<string:email>', methods = ['GET'])
+def register( **req ):
     # Toss the values in from the post request into the form (if present)
     form = UserForm(request.values)
 
@@ -88,7 +89,7 @@ def register():
         # User already exists
         elif form.data['email'] in app.users:
             flash('User/Email {} Already Exists, please log in'.format( form.data['email'] ))
-            return redirect( url_for( 'login' ) )
+            return redirect( url_for( 'login', email = form.data['email'] ))
         
         else: # create user
             app.users[ form.data['email'] ] = True
@@ -98,11 +99,12 @@ def register():
 
         return redirect( url_for( 'index' ) )
     else:
-        return render_template('register.html', form=form)
+        return render_template('register.html', form=form )
 
 # Login Route
 @app.route('/login', methods = ['GET', 'POST'])
-def login():
+@app.route('/login/<string:email>', methods = ['GET'])
+def login( **req ):
 
     # Toss the values in from the post request into the form (if present)
     form = UserForm(request.values)
@@ -111,23 +113,17 @@ def login():
 
         if current_user.is_authenticated:
             flash('Already logged in!')
-            return redirect(url_for('index'))
 
         # check if user exists
         elif form.data['email'] in app.users:
-
             login_user(User(form.data['email']))
-
             flash('Logged in successfully.')
-
-            next = request.args.get('next')
-
-            if not escape(next):
-                return abort(400)
-            return redirect(next or url_for('index'))
+            
         else:
             flash('no matching user found, please register')
-            return redirect(url_for('register'))
+            return redirect(url_for('register', email = form.data['email']))
+
+        return redirect( url_for('user_portal') )
     else:
         return render_template('login.html', form=form)
 
