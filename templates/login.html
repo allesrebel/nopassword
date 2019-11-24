@@ -1,6 +1,9 @@
-{% extends "_flash.html" %}
+{% include "partials/_flash.html" %}
 
 {% block body %}
+
+  {% include "partials/_form_errors.html" %}
+
   <form method="POST" action="/login">
     {{ form.email }}
   </form>

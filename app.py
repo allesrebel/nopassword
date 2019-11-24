@@ -1,5 +1,4 @@
 from flask import *
-import flask.helpers
 
 app = Flask(__name__)
 app.config.from_envvar('CONFIG_FILE')
@@ -8,7 +7,7 @@ app.config.from_envvar('CONFIG_FILE')
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user, mixins
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = "login"
+login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -26,8 +25,6 @@ Database connection setup etc
 """
 
 app.users = {}
-app.user_subscribers = {}
-app.user_settings = {}
 
 """
 App Router Definitions + Blank Pages
@@ -46,7 +43,7 @@ Probably just a landing for the user itself
 @login_required
 def user_portal( user ):
     if user != current_user.get_id():
-        flash('unauthorized, redirected to your portal')
+        flash('We got lost! Redirected to your portal')
         return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
 
     return render_template('index.html')
@@ -77,14 +74,14 @@ class User(mixins.UserMixin):
 @app.route( '/register', methods = ['GET', 'POST'])
 @app.route( '/register/<string:email>', methods = ['GET'])
 def register( **req ):
+
+    if current_user.is_authenticated:
+        return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
+
     # Toss the values in from the post request into the form (if present)
     form = UserForm(request.values)
 
     if request.method == 'POST' and form.validate():
-
-        # User already logged in
-        if current_user.is_authenticated:
-            flash('Already Logged In')
 
         # User already exists
         elif form.data['email'] in app.users:
@@ -106,24 +103,26 @@ def register( **req ):
 @app.route('/login/<string:email>', methods = ['GET'])
 def login( **req ):
 
+    if current_user.is_authenticated:
+        return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
+
     # Toss the values in from the post request into the form (if present)
     form = UserForm(request.values)
 
     if request.method == 'POST' and form.validate() :
 
-        if current_user.is_authenticated:
-            flash('Already logged in!')
-
         # check if user exists
-        elif form.data['email'] in app.users:
-            login_user(User(form.data['email']))
+        if form.data['email'] in app.users:
+            login_user( User(form.data['email']) )
             flash('Logged in successfully.')
             
         else:
             flash('no matching user found, please register')
             return redirect(url_for('register', email = form.data['email']))
 
-        return redirect( url_for('user_portal') )
+        # maybe check the args to verify that next is
+        # a valid location
+        return redirect( url_for('user_portal', user = current_user.get_id() ) )
     else:
         return render_template('login.html', form=form)
 

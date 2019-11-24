@@ -1,16 +1,8 @@
-{% extends "_flash.html" %}
+{% include "partials/_flash.html" %}
 
 {% block body %}
   
-  {% if form.errors %}
-    <ul class="errors">
-      {% for field_name, field_errors in form.errors|dictsort if field_errors %}
-        {% for error in field_errors %}
-          <li>{{ form[field_name].label }}: {{ error }}</li>
-        {% endfor %}
-      {% endfor %}
-    </ul>
-  {% endif %}
+  {% include "partials/_form_errors.html" %}
 
   <form method="POST" action="/register">
     {{ form.email }}
