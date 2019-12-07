@@ -39,21 +39,7 @@ App Router Definitions + Blank Pages
 def index():
     return render_template('index.html')
 
-"""
-Not sure I need this route tbh
-Probably just a landing for the user itself
-"""
-
-@app.route( rule = '/<string:user>', methods = ['GET', 'POST'] )
-@login_required
-def user_portal( user ):
-    if user != current_user.get_id():
-        flash('We got lost! Redirected to your portal')
-        return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
-
-    return render_template('index.html')
-
-from wtforms import Form, StringField, validators
+from wtforms import Form, StringField, SubmitField, validators
 
 class UserForm(Form):
     email = StringField(
@@ -64,6 +50,7 @@ class UserForm(Form):
             validators.InputRequired()
         ]
     )
+    submit = SubmitField()
 
 class User(mixins.UserMixin):
     def __init__(self, email):
@@ -89,6 +76,12 @@ def login():
     form = UserForm(request.values)
 
     if request.method == 'POST' and form.validate():
+
+        # Verify there's only one email out for user
+        if form.data['email'] in app.login_hashtable.values():
+            flash('Please wait 5 mins before requesting new login')
+            return redirect( url_for( 'index' ) )
+
         # Literally random numbers for hash
         usr_hash = base64.urlsafe_b64encode( os.urandom(18) ).decode('utf-8')
         app.login_hashtable[ usr_hash ] = form.data['email']
@@ -112,6 +105,45 @@ def login():
     else:
         return render_template('login.html', form=form )
 
+
+"""
+Not sure I need this route tbh
+Probably just a landing for the user itself
+"""
+from wtforms import Form, TextAreaField, BooleanField, SubmitField, validators
+
+class MailerForm(Form):
+    addresses = TextAreaField(
+        'Addresses', 
+        [
+            validators.InputRequired()
+        ]
+    )
+    message = TextAreaField(
+        'Message', 
+        [
+            validators.InputRequired()
+        ]
+    )
+    submit = SubmitField()
+
+@app.route( rule = '/<string:user>', methods = ['GET', 'POST'] )
+@login_required
+def user_portal( user ):
+    if user != current_user.get_id():
+        flash('We got lost! Redirecting to your portal')
+        return redirect( url_for( 'user_portal', user = current_user.get_id() ) )
+
+    # Toss the values in from the post request into the form (if present)
+    form = MailerForm(request.values)
+
+    # Figure out what to do next
+    if request.method == 'POST' and form.validate():
+        # re route to payment collection + confirmation
+        render_template('message_confirmation.html', )
+
+    return render_template('user_portal.html', form = form)
+
 # Actual Session Start from hash
 @app.route('/login/<string:hash>', methods = ['GET'])
 def login_processor(hash):
@@ -123,8 +155,8 @@ def login_processor(hash):
         if login_user( User( email ), force=True, remember=True ) is False:
             abort(201) # error!
 
-        flash( 'Welcome {}'.format( email ) )
-        return redirect( url_for( 'index' ) )
+        flash( 'Welcome {}!'.format( email ) )
+        return redirect( url_for( 'user_portal', user = email ) )
     else:
         return abort(404)
 
@@ -149,4 +181,4 @@ def user_settings( user ):
 @login_required
 def users():
     print( request.args )
-    return str( app.login_hashtable ).encode()
+    return '\n'.join( [ str( app.login_hashtable ), str( app.user_sessions ) ] )
