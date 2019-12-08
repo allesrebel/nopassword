@@ -2,7 +2,7 @@
 
 {% block body %}
   {% include "partials/_form_errors.html" %}
-  <form method="POST" action="/login">
+  <form method="POST" action="/{{ current_user.get_id() }}">
     {% for field in form %}
       {{ field }}
     {% endfor %}

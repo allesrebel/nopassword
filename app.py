@@ -139,7 +139,10 @@ def user_portal( user ):
 
     # Figure out what to do next
     if request.method == 'POST' and form.validate():
-        # re route to payment collection + confirmation
+        # Figure out if user already has payment information set up
+        # if not, save session, redirect there
+
+        # user already has payment info, let's go to confirmation
         render_template('message_confirmation.html', )
 
     return render_template('user_portal.html', form = form)
